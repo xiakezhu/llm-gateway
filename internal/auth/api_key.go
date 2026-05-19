@@ -5,21 +5,36 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 var (
 	ErrMissingAPIKey  = errors.New("missing api key")
 	ErrInvalidAPIKey  = errors.New("invalid api key")
 	ErrDisabledAPIKey = errors.New("disabled api key")
+	ErrRevokedAPIKey  = errors.New("revoked api key")
+	ErrExpiredAPIKey  = errors.New("expired api key")
+)
+
+const (
+	APIKeyStatusActive   = "active"
+	APIKeyStatusDisabled = "disabled"
+	APIKeyStatusRevoked  = "revoked"
+	APIKeyStatusExpired  = "expired"
 )
 
 type APIKey struct {
-	ID       string
-	Name     string
-	KeyHash  string
-	Enabled  bool
-	RPMLimit int
-	TPMLimit int
+	ID         string
+	Name       string
+	KeyPrefix  string
+	KeyHash    string
+	RPMLimit   int
+	TPMLimit   int
+	Status     string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	ExpiresAt  *time.Time
+	DisabledAt *time.Time
 }
 
 type Authenticator struct {
@@ -45,8 +60,20 @@ func (a *Authenticator) Authenticate(ctx context.Context, authorization string) 
 		return nil, fmt.Errorf("auth repository lookup failed: %w", err)
 	}
 
-	if !apiKey.Enabled {
+	switch apiKey.Status {
+	case "", APIKeyStatusActive:
+	case APIKeyStatusDisabled:
 		return nil, ErrDisabledAPIKey
+	case APIKeyStatusRevoked:
+		return nil, ErrRevokedAPIKey
+	case APIKeyStatusExpired:
+		return nil, ErrExpiredAPIKey
+	default:
+		return nil, ErrInvalidAPIKey
+	}
+
+	if apiKey.ExpiresAt != nil && !apiKey.ExpiresAt.After(time.Now().UTC()) {
+		return nil, ErrExpiredAPIKey
 	}
 
 	return apiKey, nil

@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestAuthenticatorSuccess(t *testing.T) {
 	repo, err := NewInMemoryRepository([]APIKey{
 		{
-			ID:      "1",
-			Name:    "demo",
-			KeyHash: HashAPIKey("sk-valid"),
-			Enabled: true,
+			ID:        "1",
+			Name:      "demo",
+			KeyPrefix: KeyPrefix("sk-valid"),
+			KeyHash:   HashAPIKey("sk-valid"),
+			Status:    APIKeyStatusActive,
 		},
 	})
 	if err != nil {
@@ -52,10 +54,11 @@ func TestAuthenticatorInvalidKey(t *testing.T) {
 func TestAuthenticatorDisabledKey(t *testing.T) {
 	repo, _ := NewInMemoryRepository([]APIKey{
 		{
-			ID:      "1",
-			Name:    "disabled",
-			KeyHash: HashAPIKey("sk-disabled"),
-			Enabled: false,
+			ID:        "1",
+			Name:      "disabled",
+			KeyPrefix: KeyPrefix("sk-disabled"),
+			KeyHash:   HashAPIKey("sk-disabled"),
+			Status:    APIKeyStatusDisabled,
 		},
 	})
 	authenticator := NewAuthenticator(repo)
@@ -63,5 +66,61 @@ func TestAuthenticatorDisabledKey(t *testing.T) {
 	_, err := authenticator.Authenticate(context.Background(), "Bearer sk-disabled")
 	if !errors.Is(err, ErrDisabledAPIKey) {
 		t.Fatalf("expected ErrDisabledAPIKey, got %v", err)
+	}
+}
+
+func TestAuthenticatorRevokedKey(t *testing.T) {
+	repo, _ := NewInMemoryRepository([]APIKey{
+		{
+			ID:        "1",
+			Name:      "revoked",
+			KeyPrefix: KeyPrefix("sk-revoked"),
+			KeyHash:   HashAPIKey("sk-revoked"),
+			Status:    APIKeyStatusRevoked,
+		},
+	})
+	authenticator := NewAuthenticator(repo)
+
+	_, err := authenticator.Authenticate(context.Background(), "Bearer sk-revoked")
+	if !errors.Is(err, ErrRevokedAPIKey) {
+		t.Fatalf("expected ErrRevokedAPIKey, got %v", err)
+	}
+}
+
+func TestAuthenticatorExpiredStatusKey(t *testing.T) {
+	repo, _ := NewInMemoryRepository([]APIKey{
+		{
+			ID:        "1",
+			Name:      "expired",
+			KeyPrefix: KeyPrefix("sk-expired"),
+			KeyHash:   HashAPIKey("sk-expired"),
+			Status:    APIKeyStatusExpired,
+		},
+	})
+	authenticator := NewAuthenticator(repo)
+
+	_, err := authenticator.Authenticate(context.Background(), "Bearer sk-expired")
+	if !errors.Is(err, ErrExpiredAPIKey) {
+		t.Fatalf("expected ErrExpiredAPIKey, got %v", err)
+	}
+}
+
+func TestAuthenticatorExpiredAtKey(t *testing.T) {
+	expiresAt := time.Now().UTC().Add(-time.Minute)
+	repo, _ := NewInMemoryRepository([]APIKey{
+		{
+			ID:        "1",
+			Name:      "expired",
+			KeyPrefix: KeyPrefix("sk-expired-at"),
+			KeyHash:   HashAPIKey("sk-expired-at"),
+			Status:    APIKeyStatusActive,
+			ExpiresAt: &expiresAt,
+		},
+	})
+	authenticator := NewAuthenticator(repo)
+
+	_, err := authenticator.Authenticate(context.Background(), "Bearer sk-expired-at")
+	if !errors.Is(err, ErrExpiredAPIKey) {
+		t.Fatalf("expected ErrExpiredAPIKey, got %v", err)
 	}
 }

@@ -80,6 +80,20 @@ func APIKeyAuthMiddleware(authenticator *auth.Authenticator, next http.Handler) 
 					Code:    "api_key_disabled",
 				})
 				return
+			case auth.ErrRevokedAPIKey:
+				writeError(w, http.StatusForbidden, APIError{
+					Message: "API key is revoked.",
+					Type:    "invalid_request_error",
+					Code:    "api_key_revoked",
+				})
+				return
+			case auth.ErrExpiredAPIKey:
+				writeError(w, http.StatusForbidden, APIError{
+					Message: "API key is expired.",
+					Type:    "invalid_request_error",
+					Code:    "api_key_expired",
+				})
+				return
 			default:
 				writeError(w, http.StatusInternalServerError, APIError{
 					Message: "Authentication service unavailable.",

@@ -8,6 +8,8 @@ import (
 
 type Config struct {
 	ServerAddr            string
+	DatabaseDriver        string
+	DatabaseDSN           string
 	DefaultModelName      string
 	LlamaCPPBaseURL       string
 	LlamaCPPAPIKeyEnv     string
@@ -27,6 +29,16 @@ func LoadFromEnv() Config {
 	addr := os.Getenv("GATEWAY_ADDR")
 	if addr == "" {
 		addr = ":8080"
+	}
+
+	databaseDriver := os.Getenv("DATABASE_DRIVER")
+	if databaseDriver == "" {
+		databaseDriver = "sqlite"
+	}
+
+	databaseDSN := os.Getenv("DATABASE_DSN")
+	if databaseDSN == "" {
+		databaseDSN = "./gateway.db"
 	}
 
 	modelName := os.Getenv("GATEWAY_DEFAULT_MODEL")
@@ -94,6 +106,8 @@ func LoadFromEnv() Config {
 
 	return Config{
 		ServerAddr:            addr,
+		DatabaseDriver:        databaseDriver,
+		DatabaseDSN:           databaseDSN,
 		DefaultModelName:      modelName,
 		LlamaCPPBaseURL:       llamaURL,
 		LlamaCPPAPIKeyEnv:     llamaAPIKeyEnv,

@@ -1,7 +1,5 @@
 # Local LLM Gateway (Phase 3)
 
-Phase 2 provides:
-
 - `GET /health`
 - `POST /v1/chat/completions` non-streaming
 - `POST /v1/chat/completions` streaming SSE (`stream=true`, llama.cpp backend)
@@ -23,6 +21,8 @@ The gateway auto-loads `.env` from project root on startup (if present). Existin
 Default environment variables:
 
 - `GATEWAY_ADDR=:8080`
+- `DATABASE_DRIVER=sqlite`
+- `DATABASE_DSN=./gateway.db`
 - `GATEWAY_DEFAULT_MODEL=local-llama`
 - `LLAMA_CPP_BASE_URL=http://localhost:8081`
 - `LLAMA_CPP_API_KEY_ENV=LLAMA_CPP_API_KEY`
@@ -34,6 +34,10 @@ Default environment variables:
 - `GATEWAY_AUTH_ENABLED=true`
 - `GATEWAY_BOOTSTRAP_API_KEY=sk-local-demo`
 - `GATEWAY_BOOTSTRAP_API_KEY_NAME=local-demo`
+
+When auth is enabled, the gateway opens SQLite, runs the `api_keys` migration, and seeds `GATEWAY_BOOTSTRAP_API_KEY` if it is not already present. Raw API keys are not stored; only `key_prefix` and `key_hash` are persisted.
+
+The `api_keys` table stores `id`, `name`, `key_prefix`, `key_hash`, `rpm_limit`, `tpm_limit`, `status`, `created_at`, `updated_at`, `expires_at`, and `disabled_at`. Supported status values are `active`, `disabled`, `revoked`, and `expired`.
 
 When `GATEWAY_OPENAI_ENABLED=true`, the gateway reads provider credentials from the env var named by `OPENAI_API_KEY_ENV` and sends `Authorization: Bearer <provider_key>` to the model provider.
 

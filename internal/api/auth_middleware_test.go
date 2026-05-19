@@ -94,16 +94,18 @@ func newTestAuthenticator(t *testing.T) *auth.Authenticator {
 
 	repo, err := auth.NewInMemoryRepository([]auth.APIKey{
 		{
-			ID:      "1",
-			Name:    "valid",
-			KeyHash: auth.HashAPIKey("sk-valid"),
-			Enabled: true,
+			ID:        "1",
+			Name:      "valid",
+			KeyPrefix: auth.KeyPrefix("sk-valid"),
+			KeyHash:   auth.HashAPIKey("sk-valid"),
+			Status:    auth.APIKeyStatusActive,
 		},
 		{
-			ID:      "2",
-			Name:    "disabled",
-			KeyHash: auth.HashAPIKey("sk-disabled"),
-			Enabled: false,
+			ID:        "2",
+			Name:      "disabled",
+			KeyPrefix: auth.KeyPrefix("sk-disabled"),
+			KeyHash:   auth.HashAPIKey("sk-disabled"),
+			Status:    auth.APIKeyStatusDisabled,
 		},
 	})
 	if err != nil {

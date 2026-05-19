@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"local-llm-gateway/internal/api"
 	"local-llm-gateway/internal/auth"
 	"local-llm-gateway/internal/backend"
 	"local-llm-gateway/internal/config"
+	"local-llm-gateway/internal/db"
 	"local-llm-gateway/internal/router"
 )
 
@@ -57,20 +60,12 @@ func main() {
 
 	finalHandler := http.Handler(mux)
 	if cfg.AuthEnabled {
-		authRepo, err := auth.NewInMemoryRepository([]auth.APIKey{
-			{
-				ID:       "key_local_demo",
-				Name:     cfg.BootstrapAPIKeyName,
-				KeyHash:  auth.HashAPIKey(cfg.BootstrapAPIKey),
-				Enabled:  true,
-				RPMLimit: 60,
-				TPMLimit: 60000,
-			},
-		})
+		authRepo, cleanup, err := buildAuthRepository(context.Background(), cfg)
 		if err != nil {
 			log.Printf("failed to initialize auth repository: %v", err)
 			os.Exit(1)
 		}
+		defer cleanup()
 
 		authenticator := auth.NewAuthenticator(authRepo)
 		finalHandler = api.APIKeyAuthMiddleware(authenticator, finalHandler)
@@ -85,5 +80,60 @@ func main() {
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Printf("server error: %v", err)
 		os.Exit(1)
+	}
+}
+
+func buildAuthRepository(ctx context.Context, cfg config.Config) (auth.Repository, func(), error) {
+	switch strings.ToLower(strings.TrimSpace(cfg.DatabaseDriver)) {
+	case "sqlite":
+		database, err := db.OpenSQLite(ctx, cfg.DatabaseDSN)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		cleanup := func() {
+			if err := database.Close(); err != nil {
+				log.Printf("warning: failed to close database: %v", err)
+			}
+		}
+
+		if err := db.MigrateSQLite(ctx, database); err != nil {
+			cleanup()
+			return nil, nil, err
+		}
+
+		repo := auth.NewSQLiteRepository(database)
+		if cfg.BootstrapAPIKey != "" {
+			if err := repo.EnsureAPIKey(ctx, auth.APIKey{
+				ID:        "key_local_demo",
+				Name:      cfg.BootstrapAPIKeyName,
+				KeyPrefix: auth.KeyPrefix(cfg.BootstrapAPIKey),
+				KeyHash:   auth.HashAPIKey(cfg.BootstrapAPIKey),
+				Status:    auth.APIKeyStatusActive,
+				RPMLimit:  60,
+				TPMLimit:  60000,
+			}); err != nil {
+				cleanup()
+				return nil, nil, err
+			}
+		}
+
+		return repo, cleanup, nil
+	default:
+		repo, err := auth.NewInMemoryRepository([]auth.APIKey{
+			{
+				ID:        "key_local_demo",
+				Name:      cfg.BootstrapAPIKeyName,
+				KeyPrefix: auth.KeyPrefix(cfg.BootstrapAPIKey),
+				KeyHash:   auth.HashAPIKey(cfg.BootstrapAPIKey),
+				Status:    auth.APIKeyStatusActive,
+				RPMLimit:  60,
+				TPMLimit:  60000,
+			},
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		return repo, func() {}, nil
 	}
 }

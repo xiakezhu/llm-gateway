@@ -6,7 +6,10 @@ import (
 	"fmt"
 )
 
-var ErrAPIKeyNotFound = errors.New("api key not found")
+var (
+	ErrAPIKeyNotFound = errors.New("api key not found")
+	ErrAPIKeyConflict = errors.New("api key already exists")
+)
 
 type Repository interface {
 	FindByHash(ctx context.Context, keyHash string) (*APIKey, error)
