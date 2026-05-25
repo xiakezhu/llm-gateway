@@ -97,6 +97,17 @@ The primary API is:
 POST /v1/chat/completions
 ```
 
+The service should expose these required endpoints:
+
+```http
+GET /health
+GET /v1/models
+POST /v1/chat/completions
+GET /metrics
+```
+
+Treat this endpoint list as a product milestone checklist. Do not remove or regress these routes while adding auth, rate limiting, routing, metrics, logging, fallback, or dashboard features.
+
 The request should be compatible with OpenAI's chat completions format:
 
 ```json
@@ -843,6 +854,7 @@ go test ./...
 * Start Go HTTP server
 * Add health endpoint
 * Add `/v1/chat/completions`
+* Keep the required service endpoint checklist visible in docs: `GET /health`, `GET /v1/models`, `POST /v1/chat/completions`, `GET /metrics`
 * Return mock OpenAI-compatible response
 * Add basic request validation
 
@@ -875,6 +887,7 @@ go test ./...
 ### Milestone 6: Metrics
 
 * Add Prometheus endpoint
+* Ensure `GET /metrics` is implemented and documented
 * Track request count, latency, token usage, errors, fallback count
 * Add Docker Compose Prometheus config
 

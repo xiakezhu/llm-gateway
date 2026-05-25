@@ -1,4 +1,4 @@
-# Local LLM Gateway (Phase 3)
+# Local LLM Gateway
 
 - `GET /health`
 - `POST /v1/chat/completions` non-streaming
@@ -8,6 +8,7 @@
 - OpenAI-compatible backend abstraction (`internal/backend`)
 - Exact model-name routing (`internal/router`)
 - API key authentication middleware (`Authorization: Bearer <key>`)
+- Per-key in-memory RPM rate limiting using `api_keys.rpm_limit`
 - Optional OpenAI provider backend with provider API key injection
 
 ## Run
@@ -38,6 +39,8 @@ Default environment variables:
 When auth is enabled, the gateway opens SQLite, runs the `api_keys` migration, and seeds `GATEWAY_BOOTSTRAP_API_KEY` if it is not already present. Raw API keys are not stored; only `key_prefix` and `key_hash` are persisted.
 
 The `api_keys` table stores `id`, `name`, `key_prefix`, `key_hash`, `rpm_limit`, `tpm_limit`, `status`, `created_at`, `updated_at`, `expires_at`, and `disabled_at`. Supported status values are `active`, `disabled`, `revoked`, and `expired`.
+
+After authentication, requests are rate limited per API key using the stored `rpm_limit`. Requests over the limit return `429` with an OpenAI-style `rate_limit_error`.
 
 When `GATEWAY_OPENAI_ENABLED=true`, the gateway reads provider credentials from the env var named by `OPENAI_API_KEY_ENV` and sends `Authorization: Bearer <provider_key>` to the model provider.
 

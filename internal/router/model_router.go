@@ -3,6 +3,7 @@ package router
 import (
 	"errors"
 	"fmt"
+	"sort"
 
 	"local-llm-gateway/internal/backend"
 )
@@ -39,4 +40,13 @@ func (r *ModelRouter) Resolve(model string) (backend.Backend, error) {
 	}
 
 	return b, nil
+}
+
+func (r *ModelRouter) Models() []string {
+	models := make([]string, 0, len(r.routes))
+	for model := range r.routes {
+		models = append(models, model)
+	}
+	sort.Strings(models)
+	return models
 }

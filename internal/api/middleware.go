@@ -5,9 +5,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"local-llm-gateway/internal/auth"
+	"local-llm-gateway/internal/ratelimit"
 )
 
 const requestIDHeader = "X-Request-ID"
@@ -107,6 +109,65 @@ func APIKeyAuthMiddleware(authenticator *auth.Authenticator, next http.Handler) 
 		ctx := context.WithValue(r.Context(), apiKeyContextKey, apiKey)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func RateLimitMiddleware(manager *ratelimit.Manager, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if shouldSkipAuth(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if manager == nil {
+			writeError(w, http.StatusInternalServerError, APIError{
+				Message: "Rate limit service unavailable.",
+				Type:    "server_error",
+				Code:    "rate_limit_unavailable",
+			})
+			return
+		}
+
+		apiKey := APIKeyFromContext(r.Context())
+		if apiKey == nil {
+			writeError(w, http.StatusUnauthorized, APIError{
+				Message: "Invalid API key.",
+				Type:    "invalid_request_error",
+				Code:    "invalid_api_key",
+			})
+			return
+		}
+
+		switch result := manager.Allow(apiKey.ID, apiKey.RPMLimit); result {
+		case ratelimit.AllowResultAllowed:
+			next.ServeHTTP(w, r)
+		case ratelimit.AllowResultOverLimit:
+			w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(apiKey.RPMLimit)))
+			writeError(w, http.StatusTooManyRequests, APIError{
+				Message: "Rate limit exceeded.",
+				Type:    "rate_limit_error",
+				Code:    "rate_limit_exceeded",
+			})
+		default:
+			writeError(w, http.StatusInternalServerError, APIError{
+				Message: "Rate limit configuration invalid.",
+				Type:    "server_error",
+				Code:    "rate_limit_invalid_config",
+			})
+		}
+	})
+}
+
+func retryAfterSeconds(rpmLimit int) int {
+	if rpmLimit <= 0 {
+		return 60
+	}
+	retryAfter := 60 / rpmLimit
+	if 60%rpmLimit != 0 {
+		retryAfter++
+	}
+	if retryAfter < 1 {
+		return 1
+	}
+	return retryAfter
 }
 
 func shouldSkipAuth(path string) bool {

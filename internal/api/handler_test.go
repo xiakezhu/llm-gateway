@@ -16,10 +16,15 @@ import (
 
 type fakeResolver struct {
 	resolveFn func(model string) (backend.Backend, error)
+	models    []string
 }
 
 func (r fakeResolver) Resolve(model string) (backend.Backend, error) {
 	return r.resolveFn(model)
+}
+
+func (r fakeResolver) Models() []string {
+	return r.models
 }
 
 type fakeBackend struct {
@@ -65,6 +70,101 @@ func TestHandleHealth(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+}
+
+func TestHandleModels(t *testing.T) {
+	server := newTestServer(fakeResolver{
+		resolveFn: func(model string) (backend.Backend, error) {
+			return nil, errors.New("not used")
+		},
+		models: []string{"local-llama", "fast-vllm"},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp struct {
+		Object string `json:"object"`
+		Data   []struct {
+			ID      string `json:"id"`
+			Object  string `json:"object"`
+			OwnedBy string `json:"owned_by"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Object != "list" {
+		t.Fatalf("expected object list, got %s", resp.Object)
+	}
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 models, got %d", len(resp.Data))
+	}
+	if resp.Data[0].ID != "fast-vllm" || resp.Data[1].ID != "local-llama" {
+		t.Fatalf("expected sorted model IDs, got %#v", resp.Data)
+	}
+	if resp.Data[0].Object != "model" {
+		t.Fatalf("expected model object, got %s", resp.Data[0].Object)
+	}
+}
+
+func TestHandleModelsMethodNotAllowed(t *testing.T) {
+	server := newTestServer(fakeResolver{
+		resolveFn: func(model string) (backend.Backend, error) {
+			return nil, errors.New("not used")
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/v1/models", nil)
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status 405, got %d", rec.Code)
+	}
+}
+
+func TestHandleMetrics(t *testing.T) {
+	server := newTestServer(fakeResolver{
+		resolveFn: func(model string) (backend.Backend, error) {
+			return nil, errors.New("not used")
+		},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/plain") {
+		t.Fatalf("expected text/plain content type, got %s", got)
+	}
+	if !strings.Contains(rec.Body.String(), "llm_gateway_info 1") {
+		t.Fatalf("expected gateway info metric, got %s", rec.Body.String())
+	}
+}
+
+func TestHandleMetricsMethodNotAllowed(t *testing.T) {
+	server := newTestServer(fakeResolver{
+		resolveFn: func(model string) (backend.Backend, error) {
+			return nil, errors.New("not used")
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/metrics", nil)
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status 405, got %d", rec.Code)
 	}
 }
 

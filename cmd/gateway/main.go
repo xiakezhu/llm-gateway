@@ -13,6 +13,7 @@ import (
 	"local-llm-gateway/internal/backend"
 	"local-llm-gateway/internal/config"
 	"local-llm-gateway/internal/db"
+	"local-llm-gateway/internal/ratelimit"
 	"local-llm-gateway/internal/router"
 )
 
@@ -68,6 +69,7 @@ func main() {
 		defer cleanup()
 
 		authenticator := auth.NewAuthenticator(authRepo)
+		finalHandler = api.RateLimitMiddleware(ratelimit.NewManager(), finalHandler)
 		finalHandler = api.APIKeyAuthMiddleware(authenticator, finalHandler)
 	}
 

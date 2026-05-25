@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -16,6 +17,10 @@ import (
 
 type modelResolver interface {
 	Resolve(model string) (backend.Backend, error)
+}
+
+type modelLister interface {
+	Models() []string
 }
 
 type Handler struct {
@@ -30,7 +35,9 @@ func NewHandler(resolver modelResolver) *Handler {
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/health", h.handleHealth)
+	mux.HandleFunc("/v1/models", h.handleModels)
 	mux.HandleFunc("/v1/chat/completions", h.handleChatCompletions)
+	mux.HandleFunc("/metrics", h.handleMetrics)
 }
 
 func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -40,6 +47,47 @@ func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) handleModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowedError(w)
+		return
+	}
+
+	modelIDs := []string{}
+	if lister, ok := h.resolver.(modelLister); ok {
+		modelIDs = append(modelIDs, lister.Models()...)
+		sort.Strings(modelIDs)
+	}
+
+	data := make([]map[string]any, 0, len(modelIDs))
+	for _, modelID := range modelIDs {
+		data = append(data, map[string]any{
+			"id":       modelID,
+			"object":   "model",
+			"created":  0,
+			"owned_by": "local-llm-gateway",
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"object": "list",
+		"data":   data,
+	})
+}
+
+func (h *Handler) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowedError(w)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, "# HELP llm_gateway_info Gateway build information.\n")
+	_, _ = io.WriteString(w, "# TYPE llm_gateway_info gauge\n")
+	_, _ = io.WriteString(w, "llm_gateway_info 1\n")
 }
 
 func (h *Handler) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
