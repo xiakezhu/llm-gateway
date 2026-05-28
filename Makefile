@@ -9,3 +9,12 @@ lint:
 
 fmt:
 	go fmt ./...
+
+openwebui-up:
+	docker compose -f docker-compose.openwebui.yml up -d
+
+openwebui-down:
+	docker compose -f docker-compose.openwebui.yml down
+
+openwebui-logs:
+	docker compose -f docker-compose.openwebui.yml logs -f open-webui

@@ -1,0 +1,18 @@
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: llm-gateway-open-webui
+    restart: unless-stopped
+    ports:
+      - "3000:8080"
+    environment:
+      # Docker Desktop resolves this to the host machine, where the Go gateway listens.
+      OPENAI_API_BASE_URL: ${OPENWEBUI_OPENAI_API_BASE_URL:-http://host.docker.internal:8080/v1}
+      OPENAI_API_KEY: ${OPENWEBUI_OPENAI_API_KEY:-sk-local-demo}
+      ENABLE_OLLAMA_API: ${OPENWEBUI_ENABLE_OLLAMA_API:-false}
+      WEBUI_AUTH: ${OPENWEBUI_AUTH:-false}
+    volumes:
+      - open-webui-data:/app/backend/data
+
+volumes:
+  open-webui-data:

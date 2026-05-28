@@ -91,3 +91,40 @@ curl -N http://localhost:8080/v1/chat/completions \
 pip install openai
 python scripts/test_chat_api.py
 ```
+
+## Open WebUI client
+
+Start the gateway first:
+
+```bash
+make run
+```
+
+In another terminal, start Open WebUI:
+
+```bash
+make openwebui-up
+```
+
+Open `http://localhost:3000`.
+
+The Docker container calls the gateway through:
+
+```txt
+OPENAI_API_BASE_URL=http://host.docker.internal:8080/v1
+OPENAI_API_KEY=sk-local-demo
+```
+
+Override those values if needed:
+
+```bash
+OPENWEBUI_OPENAI_API_BASE_URL=http://host.docker.internal:8080/v1 \
+OPENWEBUI_OPENAI_API_KEY=sk-local-demo \
+make openwebui-up
+```
+
+Stop Open WebUI:
+
+```bash
+make openwebui-down
+```
